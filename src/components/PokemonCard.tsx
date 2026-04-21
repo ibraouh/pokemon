@@ -1,10 +1,12 @@
 'use client'
 
 import Image from 'next/image'
+import { useRef, useState } from 'react'
 
 import { cn } from '@/lib/utils'
 
 import { Badge } from './ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { Skeleton } from './ui/skeleton'
 
 export type Pokemon = {
@@ -60,93 +62,205 @@ const stats = [
 ]
 
 type PokemonCardProps = {
+  imperial?: boolean
   pokemon: Pokemon
 }
 
-export default function PokemonCard({ pokemon }: PokemonCardProps) {
+const formatHeight = (meters: number, imperial: boolean) => {
+  if (!imperial) return `${meters.toFixed(1)}m`
+  const totalInches = meters * 39.3701
+  const feet = Math.floor(totalInches / 12)
+  const inches = Math.round(totalInches % 12)
+  return `${feet}'${inches}"`
+}
+
+const formatWeight = (kg: number, imperial: boolean) => {
+  if (!imperial) return `${kg.toFixed(1)}kg`
+  return `${(kg * 2.20462).toFixed(1)}lbs`
+}
+
+export default function PokemonCard({ imperial = false, pokemon }: PokemonCardProps) {
+  const [open, setOpen] = useState(false)
+  const [origin, setOrigin] = useState('center')
+  const [modalSrc, setModalSrc] = useState(pokemon.imageUrl)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  const handleClick = () => {
+    if (cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect()
+      const cx = rect.left + rect.width / 2
+      const cy = rect.top + rect.height / 2
+      const offsetX = Math.round(cx - window.innerWidth / 2)
+      const offsetY = Math.round(cy - window.innerHeight / 2)
+      setOrigin(`calc(50% + ${offsetX}px) calc(50% + ${offsetY}px)`)
+    }
+    // Use the exact URL the browser already loaded for this card so the
+    // modal always shows the same photo without a new network request.
+    setModalSrc(imgRef.current?.currentSrc ?? pokemon.imageUrl)
+    setOpen(true)
+  }
+
   return (
-    <div className="group relative overflow-hidden rounded-md">
-      <div className="relative aspect-[2/3] w-full">
-        <Image
-          alt={pokemon.name}
-          className="object-cover"
-          fill
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          src={pokemon.imageUrl}
-        />
+    <>
+      <div
+        ref={cardRef}
+        className="group relative cursor-pointer overflow-hidden rounded-md"
+        onClick={handleClick}
+      >
+        <div className="relative aspect-[2/3] w-full">
+          <Image
+            ref={imgRef}
+            alt={pokemon.name}
+            className="object-cover"
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            src={pokemon.imageUrl}
+          />
 
-        {/* hover overlay — expanded view */}
-        <div className="absolute inset-0 flex flex-col justify-end overflow-y-auto bg-gradient-to-t from-white/90 via-white/60 to-transparent p-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100 dark:from-black/85 dark:via-black/50 dark:to-transparent">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-base font-bold text-neutral-900 dark:text-white">{pokemon.name}</p>
-            {pokemon.isLegendary && (
-              <Badge className="shrink-0 border-yellow-500 bg-transparent text-yellow-600 dark:text-yellow-400">
-                Legendary
-              </Badge>
-            )}
-          </div>
+          {/* hover overlay — expanded view */}
+          <div className="absolute inset-0 flex flex-col justify-end overflow-y-auto bg-gradient-to-t from-white/90 via-white/60 to-transparent p-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100 dark:from-black/85 dark:via-black/50 dark:to-transparent">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-base font-bold text-neutral-900 dark:text-white">{pokemon.name}</p>
+              {pokemon.isLegendary && (
+                <Badge className="shrink-0 border-yellow-500 bg-transparent text-yellow-600 dark:text-yellow-400">
+                  Legendary
+                </Badge>
+              )}
+            </div>
 
-          <p className="mb-3 mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-300">
-            {pokemon.description}
-          </p>
+            <p className="mb-3 mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-300">
+              {pokemon.description}
+            </p>
 
-          <div className="mb-3 space-y-1.5">
-            {stats.map(({ bar, key, label }) => (
-              <div className="flex items-center gap-2" key={key}>
-                <span className="w-7 font-mono text-right text-xs text-neutral-500 dark:text-neutral-400">{label}</span>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-300 dark:bg-neutral-700">
-                  <div
-                    className={cn('h-full rounded-full', bar)}
-                    style={{ width: `${(pokemon[key] / STAT_MAX) * 100}%` }}
-                  />
+            <div className="mb-3 space-y-1.5">
+              {stats.map(({ bar, key, label }) => (
+                <div className="flex items-center gap-2" key={key}>
+                  <span className="w-7 font-mono text-right text-xs text-neutral-500 dark:text-neutral-400">{label}</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-300 dark:bg-neutral-700">
+                    <div
+                      className={cn('h-full rounded-full', bar)}
+                      style={{ width: `${(pokemon[key] / STAT_MAX) * 100}%` }}
+                    />
+                  </div>
+                  <span className="w-7 font-mono text-right text-xs font-semibold tabular-nums text-neutral-900 dark:text-white">
+                    {pokemon[key]}
+                  </span>
                 </div>
-                <span className="w-7 font-mono text-right text-xs font-semibold tabular-nums text-neutral-900 dark:text-white">
-                  {pokemon[key]}
-                </span>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            <div className="mb-3 flex gap-4 font-mono text-xs text-neutral-500 dark:text-neutral-400">
+              <span>
+                Height <span className="font-semibold text-neutral-900 dark:text-white">{formatHeight(pokemon.height, imperial)}</span>
+              </span>
+              <span>
+                Weight <span className="font-semibold text-neutral-900 dark:text-white">{formatWeight(pokemon.weight, imperial)}</span>
+              </span>
+              <span>
+                Gen <span className="font-semibold text-neutral-900 dark:text-white">{pokemon.generation}</span>
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-1">
+              {pokemon.types.map(type => (
+                <Badge
+                  className={cn(getTypeColor(type), 'border-0 font-mono text-xs text-white')}
+                  key={type}
+                >
+                  {type}
+                </Badge>
+              ))}
+            </div>
           </div>
 
-          <div className="mb-3 flex gap-4 font-mono text-xs text-neutral-500 dark:text-neutral-400">
-            <span>
-              Height <span className="font-semibold text-neutral-900 dark:text-white">{pokemon.height.toFixed(1)}m</span>
-            </span>
-            <span>
-              Weight <span className="font-semibold text-neutral-900 dark:text-white">{pokemon.weight.toFixed(1)}kg</span>
-            </span>
-            <span>
-              Gen <span className="font-semibold text-neutral-900 dark:text-white">{pokemon.generation}</span>
-            </span>
-          </div>
-
-          <div className="flex flex-wrap gap-1">
-            {pokemon.types.map(type => (
-              <Badge
-                className={cn(getTypeColor(type), 'border-0 font-mono text-xs text-white')}
-                key={type}
-              >
-                {type}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        {/* default name bar with type badges — hidden on hover */}
-        <div className="absolute bottom-0 left-0 right-0 translate-y-0 bg-white/85 px-3 py-2 transition-transform duration-300 group-hover:translate-y-full dark:bg-neutral-950/80">
-          <p className="mb-1 font-bold text-neutral-900 dark:text-white">{pokemon.name}</p>
-          <div className="flex flex-wrap gap-1">
-            {pokemon.types.map(type => (
-              <Badge
-                className={cn(getTypeColor(type), 'border-0 font-mono text-xs text-white')}
-                key={type}
-              >
-                {type}
-              </Badge>
-            ))}
+          {/* default name bar with type badges — hidden on hover */}
+          <div className="absolute bottom-0 left-0 right-0 translate-y-0 bg-white/85 px-3 py-2 transition-transform duration-300 group-hover:translate-y-full dark:bg-neutral-950/80">
+            <p className="mb-1 font-bold text-neutral-900 dark:text-white">{pokemon.name}</p>
+            <div className="flex flex-wrap gap-1">
+              {pokemon.types.map(type => (
+                <Badge
+                  className={cn(getTypeColor(type), 'border-0 font-mono text-xs text-white')}
+                  key={type}
+                >
+                  {type}
+                </Badge>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      <Dialog onOpenChange={setOpen} open={open}>
+        <DialogContent className="max-w-2xl" style={{ transformOrigin: origin }}>
+          <div className="flex flex-col">
+            {/* Full image — always on top */}
+            <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-t-xl bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt={pokemon.name}
+                className="absolute inset-0 h-full w-full object-contain"
+                src={modalSrc}
+              />
+            </div>
+
+            {/* Stats — right half */}
+            <div className="max-h-[50vh] overflow-y-auto p-5 space-y-4">
+              <div className="flex items-start justify-between gap-2">
+                <DialogTitle>{pokemon.name}</DialogTitle>
+                {pokemon.isLegendary && (
+                  <Badge className="shrink-0 border-yellow-500 bg-transparent text-yellow-600 dark:text-yellow-400">
+                    Legendary
+                  </Badge>
+                )}
+              </div>
+
+              <DialogDescription>{pokemon.description}</DialogDescription>
+
+              <div className="space-y-2">
+                {stats.map(({ bar, key, label }) => (
+                  <div className="flex items-center gap-2" key={key}>
+                    <span className="w-7 font-mono text-right text-xs text-muted-foreground">{label}</span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn('h-full rounded-full', bar)}
+                        style={{ width: `${(pokemon[key] / STAT_MAX) * 100}%` }}
+                      />
+                    </div>
+                    <span className="w-7 font-mono text-right text-xs font-semibold tabular-nums text-foreground">
+                      {pokemon[key]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-4 font-mono text-xs text-muted-foreground">
+                <span>
+                  Height <span className="font-semibold text-foreground">{formatHeight(pokemon.height, imperial)}</span>
+                </span>
+                <span>
+                  Weight <span className="font-semibold text-foreground">{formatWeight(pokemon.weight, imperial)}</span>
+                </span>
+                <span>
+                  Gen <span className="font-semibold text-foreground">{pokemon.generation}</span>
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-1">
+                {pokemon.types.map(type => (
+                  <Badge
+                    className={cn(getTypeColor(type), 'border-0 font-mono text-xs text-white')}
+                    key={type}
+                  >
+                    {type}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 

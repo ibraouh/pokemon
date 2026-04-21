@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutGrid, Moon, StretchHorizontal, Sun } from 'lucide-react'
+import { LayoutGrid, Moon, Ruler, Scale, StretchHorizontal, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
@@ -14,6 +14,7 @@ import type { Pokemon } from './PokemonCard'
 import PokemonCard, { getTypeColor, PokemonCardSkeleton } from './PokemonCard'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
 type ApiResponse = {
   data: Pokemon[]
@@ -43,6 +44,7 @@ export default function PokemonGrid() {
   const [query, setQuery] = useState('')
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [tight, setTight] = useState(true)
+  const [imperial, setImperial] = useState(false)
 
   const { resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
@@ -112,35 +114,52 @@ export default function PokemonGrid() {
           width={40}
         />
         <div className="flex items-center gap-2">
-          <Button
-            aria-label={tight ? 'Switch to large view' : 'Switch to small view'}
-            onClick={() => setTight(t => !t)}
-            size="xs"
-            variant="outline"
+          <ToggleGroup
+            onValueChange={v => { if (v) setTight(v === 'small') }}
+            type="single"
+            value={tight ? 'small' : 'large'}
           >
-            {tight ? (
-              <StretchHorizontal className="size-3.5" />
-            ) : (
+            <ToggleGroupItem value="small">
               <LayoutGrid className="size-3.5" />
-            )}
-            {tight ? 'Large' : 'Small'}
-          </Button>
+              Small
+            </ToggleGroupItem>
+            <ToggleGroupItem value="large">
+              <StretchHorizontal className="size-3.5" />
+              Large
+            </ToggleGroupItem>
+          </ToggleGroup>
 
           {mounted && (
-            <Button
-              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              size="xs"
-              variant="outline"
+            <ToggleGroup
+              onValueChange={v => { if (v) setTheme(v) }}
+              type="single"
+              value={isDark ? 'dark' : 'light'}
             >
-              {isDark ? (
-                <Sun className="size-3.5" />
-              ) : (
+              <ToggleGroupItem value="dark">
                 <Moon className="size-3.5" />
-              )}
-              {isDark ? 'Light' : 'Dark'}
-            </Button>
+                Dark
+              </ToggleGroupItem>
+              <ToggleGroupItem value="light">
+                <Sun className="size-3.5" />
+                Light
+              </ToggleGroupItem>
+            </ToggleGroup>
           )}
+
+          <ToggleGroup
+            onValueChange={v => { if (v) setImperial(v === 'imperial') }}
+            type="single"
+            value={imperial ? 'imperial' : 'metric'}
+          >
+            <ToggleGroupItem value="metric">
+              <Ruler className="size-3.5" />
+              Metric
+            </ToggleGroupItem>
+            <ToggleGroupItem value="imperial">
+              <Scale className="size-3.5" />
+              Imperial
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
 
         <Input
@@ -182,7 +201,7 @@ export default function PokemonGrid() {
         }
       >
         {pokemon.map(p => (
-          <PokemonCard key={p.id} pokemon={p} />
+          <PokemonCard imperial={imperial} key={p.id} pokemon={p} />
         ))}
         {loading &&
           skeletons.map((_, i) => (

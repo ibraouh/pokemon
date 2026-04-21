@@ -12,12 +12,14 @@ A walkthrough of every decision made building this app, written as if I'm being 
 
 **`next-themes`** — Handles dark/light mode toggling in a Next.js App Router context. The hard part of theme toggling in SSR frameworks is the hydration mismatch: the server doesn't know the user's preferred theme, so if you render dark on the server and the user's stored preference is light, you get a flash. `next-themes` solves this by injecting a blocking script that reads `localStorage` before the first paint, applying the correct class before React hydrates. `suppressHydrationWarning` on `<html>` tells React to ignore the class attribute mismatch since `next-themes` manages it intentionally.
 
-**`shadcn/ui` (Badge, Button, Input, Skeleton)** — Rather than writing UI primitives from scratch, all interactive and display components come from shadcn. shadcn components are not a black-box library — they're copied directly into the codebase as source files you own and can customize freely.
+**`shadcn/ui` (Badge, Button, Input, Skeleton, Dialog, ToggleGroup)** — Rather than writing UI primitives from scratch, all interactive and display components come from shadcn. shadcn components are not a black-box library — they're copied directly into the codebase as source files you own and can customize freely.
 
-- `Button` — used for the Small/Large toggle, the Light/Dark toggle, and all 18 type filter tags. The `outline` variant is already theme-aware (adapts to light/dark via CSS variables). The `xs` size fits the compact toolbar. For active type tags, the base variant styles are overridden with the type's Tailwind color class via `cn()`.
+- `Button` — used for the 18 type filter tags. The `outline` variant is already theme-aware (adapts to light/dark via CSS variables). The `xs` size fits the compact toolbar. For active type tags, the base variant styles are overridden with the type's Tailwind color class via `cn()`.
 - `Input` — the search bar.
 - `Badge` — type labels on cards and in the hover overlay.
 - `Skeleton` — loading placeholder that matches the card's `aspect-[2/3]` ratio so there's no layout shift when real cards load in.
+- `Dialog` — Radix UI's `Dialog` primitive (available directly from the already-installed `radix-ui` unified package, no extra dependency needed) wrapped in a thin shadcn-style component at `src/components/ui/dialog.tsx`. Handles focus trapping, `Escape` to close, and click-outside-to-close out of the box. The overlay uses `backdrop-blur-sm` for a frosted-glass feel.
+- `ToggleGroup` — Radix UI's `ToggleGroup` primitive, also from the `radix-ui` unified package. Used for the three toolbar controls: Dark/Light, Small/Large, and Metric/Imperial. Preferred over individual toggle buttons because it makes both options visible at once — the user can see the current state and the alternative without having to infer it from a label. The active item uses `bg-primary text-primary-foreground` for a filled highlight that reads clearly in both dark and light mode.
 
 ---
 
@@ -52,6 +54,45 @@ CSS Grid places items in DOM order left-to-right, row by row. New items always a
 ### Stat bars scaled to 255
 
 The maximum possible stat value in the dataset is 255, which is also the canonical maximum in the Pokemon game series. Each bar is `(value / 255) * 100`% wide. I use an inline `style` for this because Tailwind cannot generate arbitrary percentage widths at runtime — you can't do `w-[${n}%]` with a dynamic value and expect it to work, since Tailwind's JIT scanner reads static strings at build time.
+
+### Metric / Imperial unit toggle
+
+Height and weight are displayed in both the hover overlay and the detail modal. A `ToggleGroup` in the toolbar switches between metric (default) and imperial. The `imperial` boolean is owned by `PokemonGrid` and passed down as a prop to each `PokemonCard` — no context or global state needed since the grid already renders all cards and controls re-renders naturally when the prop changes.
+
+Conversion is done at render time via two pure helper functions in `PokemonCard.tsx`:
+
+- `formatHeight(meters, imperial)` — metric: `1.7m`; imperial: converts to total inches (`meters × 39.3701`), floors to feet, rounds the remainder to inches, formats as `5'7"`.
+- `formatWeight(kg, imperial)` — metric: `68.0kg`; imperial: `kg × 2.20462` formatted as `149.9lbs`.
+
+The data is always stored in metric (the canonical source). Imperial values are derived on the fly rather than stored separately so there's a single source of truth.
+
+Dark is placed left of Light in the toggle, and Metric left of Imperial, because defaults go on the left — users read left-to-right and the leftmost option reads as "normal". Putting the default on the right would feel inverted.
+
+### Click-to-modal for full detail view
+
+Clicking a card opens a `Dialog` modal with the full photo on one side and all stats on the other. This complements the hover overlay rather than replacing it — hover is still the low-friction way to preview stats while browsing, and the click modal is for when you actually want to read everything at full size.
+
+The modal uses a side-by-side layout on desktop (`sm:flex-row`) and a stacked layout on mobile (`flex-col`), with the photo on top on mobile. On mobile the modal is constrained to `w-[calc(100%-2rem)]` so it always has 1rem of margin on each side — without this it would be flush to the screen edges.
+
+The image uses `object-contain` (not `object-cover`) in the modal so the full photo is always visible, not cropped. A `bg-muted` background fills any letterbox space.
+
+### "Expand from card" animation via `transform-origin`
+
+The modal appears to grow out of the card that was clicked. This is done purely with CSS — no animation library needed.
+
+When a card is clicked, its center position in the viewport is computed: `cx = rect.left + rect.width / 2`, `cy = rect.top + rect.height / 2`. The offset from the viewport center is then `(cx - vw/2, cy - vh/2)`. This is passed as a CSS `transform-origin` on the modal content:
+
+```
+transform-origin: calc(50% + {offsetX}px) calc(50% + {offsetY}px)
+```
+
+Because the modal is centered at `50vw / 50vh`, adding that offset to `50%` maps the scale origin back to the card's position. The `zoom-in-75` animation from `tw-animate-css` then scales from 0.75 → 1.0 using that origin, making the modal visually expand from the card outward.
+
+### Modal image uses `currentSrc`, not the raw `imageUrl`
+
+The image data uses `loremflickr.com` URLs. Loremflickr selects photos based on the requested dimensions — even with a `?lock=` seed, requesting the same URL at a different size can return a different photo because it re-queries Flickr with new dimensions. Next.js Image optimization generates a srcset and requests different widths for the card vs the modal, which caused the modal to show a completely different photo.
+
+The fix: on click, read `imgRef.current?.currentSrc` from the card's `<img>` element. This is the exact URL the browser already resolved and cached — the `/_next/image?url=...&w=256` entry that's sitting in the browser cache. The modal renders a plain `<img>` with that same URL, so it's guaranteed to show the same photo with no extra network request.
 
 ### Hover overlay instead of click-to-expand
 
