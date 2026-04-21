@@ -2,6 +2,7 @@
 
 import { LayoutGrid, Moon, StretchHorizontal, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { useInView } from 'react-intersection-observer'
 import { useDebounce } from 'use-debounce'
@@ -101,8 +102,15 @@ export default function PokemonGrid() {
   ]
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
+    <div className="min-h-screen bg-background px-4 pb-8 pt-4">
       <div className="mx-auto mb-6 w-full max-w-4xl space-y-2">
+        <Image
+          alt="Pokemon Explorer"
+          className="mb-3 opacity-90"
+          height={40}
+          src="/icon.png"
+          width={40}
+        />
         <div className="flex items-center gap-2">
           <Button
             aria-label={tight ? 'Switch to large view' : 'Switch to small view'}
