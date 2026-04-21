@@ -10,18 +10,27 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const search = searchParams.get('search') || ''
+    const typesParam = searchParams.get('types') || ''
+    const selectedTypes = typesParam ? typesParam.split(',') : []
 
     let filteredPokemon = pokemonData
 
-    // Apply search filter if provided
     if (search) {
-      filteredPokemon = pokemonData.filter(
+      filteredPokemon = filteredPokemon.filter(
         pokemon =>
           pokemon.name.toLowerCase().includes(search.toLowerCase()) ||
           pokemon.types.some(type =>
             type.toLowerCase().includes(search.toLowerCase())
           ) ||
           pokemon.description.toLowerCase().includes(search.toLowerCase())
+      )
+    }
+
+    if (selectedTypes.length > 0) {
+      filteredPokemon = filteredPokemon.filter(pokemon =>
+        selectedTypes.every(st =>
+          pokemon.types.some(t => t.toLowerCase() === st.toLowerCase())
+        )
       )
     }
 
