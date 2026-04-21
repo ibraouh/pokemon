@@ -3,29 +3,15 @@
 import Image from 'next/image'
 import { useRef, useState } from 'react'
 
+import type { Pokemon } from '@/lib/types'
+
 import { cn } from '@/lib/utils'
 
 import { Badge } from './ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { Skeleton } from './ui/skeleton'
 
-export type Pokemon = {
-  attack: number
-  defense: number
-  description: string
-  generation: number
-  height: number
-  hp: number
-  id: number
-  imageUrl: string
-  isLegendary?: boolean
-  name: string
-  specialAttack: number
-  specialDefense: number
-  speed: number
-  types: string[]
-  weight: number
-}
+export type { Pokemon }
 
 const colors: Record<string, string> = {
   Bug: 'bg-lime-500 hover:bg-lime-500 dark:bg-lime-500 dark:hover:bg-lime-500',
@@ -83,7 +69,7 @@ export default function PokemonCard({ imperial = false, pokemon }: PokemonCardPr
   const [open, setOpen] = useState(false)
   const [origin, setOrigin] = useState('center')
   const [modalSrc, setModalSrc] = useState(pokemon.imageUrl)
-  const cardRef = useRef<HTMLDivElement>(null)
+  const cardRef = useRef<HTMLButtonElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
 
   const handleClick = () => {
@@ -103,17 +89,18 @@ export default function PokemonCard({ imperial = false, pokemon }: PokemonCardPr
 
   return (
     <>
-      <div
-        ref={cardRef}
-        className="group relative cursor-pointer overflow-hidden rounded-md"
+      <button
+        className="group relative w-full cursor-pointer overflow-hidden rounded-md text-left"
         onClick={handleClick}
+        ref={cardRef}
+        type="button"
       >
         <div className="relative aspect-[2/3] w-full">
           <Image
-            ref={imgRef}
             alt={pokemon.name}
             className="object-cover"
             fill
+            ref={imgRef}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             src={pokemon.imageUrl}
           />
@@ -189,7 +176,7 @@ export default function PokemonCard({ imperial = false, pokemon }: PokemonCardPr
             </div>
           </div>
         </div>
-      </div>
+      </button>
 
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent className="max-w-2xl" style={{ transformOrigin: origin }}>

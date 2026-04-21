@@ -1,8 +1,8 @@
 'use client'
 
+import { X } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import * as React from 'react'
-import { X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -10,35 +10,13 @@ function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>)
   return <DialogPrimitive.Root {...props} />
 }
 
-function DialogPortal({ ...props }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal {...props} />
-}
-
 function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.Close>) {
   return <DialogPrimitive.Close {...props} />
 }
 
-function DialogOverlay({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
-  return (
-    <DialogPrimitive.Overlay
-      className={cn(
-        'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm',
-        'data-[state=open]:animate-in data-[state=closed]:animate-out',
-        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-        'duration-200',
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
 function DialogContent({
-  className,
   children,
+  className,
   style,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
@@ -68,18 +46,6 @@ function DialogContent({
   )
 }
 
-function DialogTitle({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Title>) {
-  return (
-    <DialogPrimitive.Title
-      className={cn('text-xl font-bold text-foreground', className)}
-      {...props}
-    />
-  )
-}
-
 function DialogDescription({
   className,
   ...props
@@ -87,6 +53,40 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       className={cn('text-sm leading-relaxed text-muted-foreground', className)}
+      {...props}
+    />
+  )
+}
+
+function DialogOverlay({
+  className,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+  return (
+    <DialogPrimitive.Overlay
+      className={cn(
+        'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm',
+        'data-[state=open]:animate-in data-[state=closed]:animate-out',
+        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        'duration-200',
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function DialogPortal({ ...props }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
+  return <DialogPrimitive.Portal {...props} />
+}
+
+function DialogTitle({
+  className,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Title>) {
+  return (
+    <DialogPrimitive.Title
+      className={cn('text-xl font-bold text-foreground', className)}
       {...props}
     />
   )

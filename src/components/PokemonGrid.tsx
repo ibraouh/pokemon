@@ -3,13 +3,13 @@
 import { LayoutGrid, Moon, Ruler, Scale, StretchHorizontal, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import Image from 'next/image'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useInView } from 'react-intersection-observer'
 import { useDebounce } from 'use-debounce'
 
-import { cn } from '@/lib/utils'
+import type { Pokemon } from '@/lib/types'
 
-import type { Pokemon } from './PokemonCard'
+import { cn } from '@/lib/utils'
 
 import PokemonCard, { getTypeColor, PokemonCardSkeleton } from './PokemonCard'
 import { Button } from './ui/button'
@@ -28,6 +28,13 @@ type ApiResponse = {
   }
 }
 
+type PokemonGridProps = {
+  initialData?: {
+    hasNext: boolean
+    pokemon: Pokemon[]
+  }
+}
+
 const ALL_TYPES = [
   'Bug', 'Dark', 'Dragon', 'Electric', 'Fairy', 'Fighting',
   'Fire', 'Flying', 'Ghost', 'Grass', 'Ground', 'Ice',
@@ -36,11 +43,12 @@ const ALL_TYPES = [
 
 const skeletons = Array.from({ length: 10 })
 
-export default function PokemonGrid() {
-  const [hasNext, setHasNext] = useState(true)
+export default function PokemonGrid({ initialData }: PokemonGridProps = {}) {
+  const [hasNext, setHasNext] = useState(initialData?.hasNext ?? true)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<null | string>(null)
   const [page, setPage] = useState(1)
-  const [pokemon, setPokemon] = useState<Pokemon[]>([])
+  const [pokemon, setPokemon] = useState<Pokemon[]>(initialData?.pokemon ?? [])
   const [query, setQuery] = useState('')
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [tight, setTight] = useState(true)
@@ -53,6 +61,13 @@ export default function PokemonGrid() {
 
   const [debouncedQuery] = useDebounce(query, 400)
 
+  // Captured once on mount so the fetch effect can reference it via a stable
+  // ref rather than listing `initialData` as a dep (it never changes).
+  const initialDataRef = useRef(initialData)
+  const didSkipInitialFetch = useRef(false)
+  // Prevents the reset effect from clearing initialData on the initial mount.
+  const hasMountedRef = useRef(false)
+
   const { ref: sentinelRef } = useInView({
     onChange: inView => {
       if (inView && hasNext && !loading) setPage(p => p + 1)
@@ -60,32 +75,46 @@ export default function PokemonGrid() {
   })
 
   useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true
+      return
+    }
     setHasNext(true)
     setPage(1)
     setPokemon([])
   }, [debouncedQuery, selectedTypes])
 
   useEffect(() => {
+    if (!didSkipInitialFetch.current && initialDataRef.current) {
+      didSkipInitialFetch.current = true
+      return
+    }
+
     let cancelled = false
+    setError(null)
     setLoading(true)
 
     const typesQuery = selectedTypes.length > 0
       ? `&types=${encodeURIComponent(selectedTypes.join(','))}`
       : ''
+    const url = `/api/pokemon?page=${page}&limit=20&search=${encodeURIComponent(debouncedQuery)}${typesQuery}`
 
-    void fetch(
-      `/api/pokemon?page=${page}&limit=20&search=${encodeURIComponent(debouncedQuery)}${typesQuery}`
-    )
-      .then(r => r.json() as Promise<ApiResponse>)
-      .then(result => {
+    const run = async () => {
+      try {
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`Server error: ${res.status}`)
+        const result = await res.json() as ApiResponse
         if (cancelled) return
         setPokemon(prev => (page === 1 ? result.data : [...prev, ...result.data]))
         setHasNext(result.pagination.hasNext)
-        setLoading(false)
-      })
-      .catch(() => {
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Something went wrong')
+      } finally {
         if (!cancelled) setLoading(false)
-      })
+      }
+    }
+
+    void run()
 
     return () => {
       cancelled = true
@@ -98,10 +127,10 @@ export default function PokemonGrid() {
     )
   }
 
-  const sortedTypes = [
+  const sortedTypes = useMemo(() => [
     ...selectedTypes,
     ...ALL_TYPES.filter(t => !selectedTypes.includes(t))
-  ]
+  ], [selectedTypes])
 
   return (
     <div className="min-h-screen bg-background px-4 pb-8 pt-4">
@@ -211,7 +240,11 @@ export default function PokemonGrid() {
 
       <div ref={sentinelRef} />
 
-      {!hasNext && !loading && pokemon.length > 0 && (
+      {error && (
+        <p className="mt-8 text-center text-sm text-red-500">{error}</p>
+      )}
+
+      {!hasNext && !loading && !error && pokemon.length > 0 && (
         <p className="mt-8 text-center text-sm text-neutral-500">
           No more creatures found.
         </p>

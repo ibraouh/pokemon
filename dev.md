@@ -1,6 +1,6 @@
 # Dev Notes
 
-A walkthrough of every decision made building this app, written as if I'm being interviewed about it.
+A walkthrough of every decision made building this app.
 
 ---
 
@@ -151,3 +151,76 @@ The design spec was dark-first (black background, dark cards). Dark mode is also
 ### Light mode overlay using white gradient
 
 In light mode, the card overlay changes from `from-black/85` to `from-white/90`. This was necessary because a dark overlay on a light-background page looks like a UI error — as if the dark mode partially leaked in. The white gradient blends with the light page context and still provides enough contrast for the dark text (`text-neutral-900`) rendered on top of it.
+
+---
+
+## Refinements (post-review)
+
+These changes were made in response to a senior-level code review. Each one targets a gap that would matter in production.
+
+### `Pokemon` type moved to `src/lib/types.ts`
+
+Originally the `Pokemon` type was defined in `PokemonCard.tsx` and re-exported from there. `PokemonGrid` imported it from the card component — a UI leaf owning the domain model. This is the wrong dependency direction and causes circular-import problems as the codebase grows. The type now lives in `src/lib/types.ts` and is imported from there by both components, the lib utilities, and any future consumers.
+
+### Data logic extracted to `src/lib/pokemon.ts`
+
+The filter and paginate logic that was inline in the API route handler is now a standalone `getPokemon({ page, limit, search, types })` function in `src/lib/pokemon.ts`. The route handler calls it with parsed query params. The server component in `page.tsx` calls it directly (no HTTP round-trip). This makes the logic independently testable and reusable without coupling it to the HTTP layer.
+
+### SSR initial data via `initialData` prop
+
+`page.tsx` is a server component. It now calls `getPokemon({ page: 1, limit: 20 })` at render time and passes the result as an `initialData` prop to `PokemonGrid`. The client component initializes its `pokemon` and `hasNext` state from this prop rather than from an empty default.
+
+The result: on the first visit, the browser receives pre-rendered HTML with real cards already in it. There is no skeleton flash — the user sees data immediately. The build output confirms the homepage is marked `○` (statically prerendered). This is the main value proposition of Next.js App Router for data-heavy pages.
+
+The client still fetches from the API for every subsequent action (search, filter, infinite scroll page 2+). `initialData` is only used once, on mount.
+
+### `hasMountedRef` guard on the reset effect
+
+The reset effect clears `pokemon`, resets `page` to 1, and sets `hasNext` to true whenever `debouncedQuery` or `selectedTypes` changes. But React runs all `useEffect` hooks on the initial mount — not just when deps change. Without a guard, the reset effect was firing on mount and immediately calling `setPokemon([])`, wiping the `initialData` before the user ever saw it.
+
+The fix is a `hasMountedRef` ref that starts `false`. The reset effect checks it and returns early on the first run, then flips it to `true`. From that point on, the reset behaves normally. A `useRef` is the right tool here (vs `useState`) because the guard doesn't need to trigger a re-render and shouldn't appear in the dependency array.
+
+### `fetch` rewritten to `async/await` with `res.ok` check and error state
+
+The original fetch was a `.then()` chain that never checked `res.ok`. `fetch()` only rejects on network failure — a 500 response resolves normally, and calling `.json()` on it returns `{ error: '...' }` instead of the expected shape. Accessing `.pagination.hasNext` on that object throws a TypeError which the empty `.catch()` block silently swallowed. The user would see the loading spinner stop with no explanation.
+
+The fetch is now an `async/await` block that:
+
+1. Checks `res.ok` and throws if the server returned an error status
+2. Catches all errors and writes a message to an `error: string | null` state
+3. Displays that message in the UI below the grid
+
+The `finally` block handles `setLoading(false)` in all paths, including error paths, so the spinner always stops.
+
+### Card `<div onClick>` replaced with `<button>`
+
+The clickable card was a `<div>` with an `onClick` handler. A `<div>` is not in the tab order and does not respond to keyboard events — pressing Tab can't reach it, and pressing Enter or Space does nothing. This fails basic accessibility requirements.
+
+Replacing it with `<button type="button">` gives keyboard focus and Enter/Space activation for free. Three extra classes are needed to neutralize browser button defaults: `w-full` (buttons are inline by default, not block), `text-left` (button centers its text by default), and `bg-transparent` is handled automatically since buttons inherit the parent background. The `cardRef` type changes from `HTMLDivElement` to `HTMLButtonElement`.
+
+### `sortedTypes` wrapped in `useMemo`
+
+The sorted type array was recomputed on every render:
+
+```ts
+const sortedTypes = [
+  ...selectedTypes,
+  ...ALL_TYPES.filter(t => !selectedTypes.includes(t))
+]
+```
+
+This runs on every `loading` flip, every `pokemon` append, and every unrelated state update. It's a O(n²) operation (18 × 18 at most, so not expensive, but it's a correctness principle). Wrapped in `useMemo` with `[selectedTypes]` as the dependency, it only recomputes when the filter selection actually changes.
+
+### `parseInt` radix and bounds validation in the API route
+
+`parseInt(str)` without a radix argument can misinterpret strings beginning with `0` in some environments. The route now uses `parseInt(str, 10)` everywhere. It also validates the parsed values: `page` is clamped to a minimum of 1, and `limit` is clamped between 1 and 100. `parseInt('abc', 10)` returns `NaN`, and the `|| 1` / `|| 20` fallback converts `NaN` to the safe default rather than letting `NaN` propagate through the slice arithmetic and silently return an empty result.
+
+---
+
+## Dev environment notes
+
+### Stale chunk 404s after restarting the dev server
+
+When `next dev` restarts, it regenerates all JavaScript chunks with new content hashes. If the browser has a tab open with the old page cached, it will try to load the old chunk filenames — which no longer exist on the new server — and get 404s for all of them.
+
+**Fix: hard refresh** (`Cmd+Shift+R` on Mac, `Ctrl+Shift+R` on Windows/Linux). This forces the browser to discard the cached HTML and fetch a fresh copy with the correct chunk URLs. A normal refresh (`Cmd+R`) is not enough because it reuses the cached HTML document.
